@@ -8,6 +8,7 @@ const axios = require("axios");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const chatUsers = require("../../models").chatUsers;
+const bcrypt = require("bcrypt");
 
 /* Get user by ID or users list. */
 
@@ -63,25 +64,6 @@ router.post("/", function (req, res, next) {
 });
 
 /* Update Client with U */
-
-router.post(
-  "/updateUser",
-  passport.authenticate("jwt", { session: false }),
-  function (req, res, next) {
-    let userData = {
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      email: req.body.email,
-      isRestricted: req.body.isRestricted,
-    };
-    User.update(userData, { where: { id: req.body.clientId } })
-      .then(() => {
-        res.json({ success: true, data: userData });
-      })
-      .catch(next);
-  }
-);
-
 router.post("/conversation", async function (req, res, next) {
   const data = {
     eventType: req.body.eventType,
@@ -95,6 +77,14 @@ router.post("/conversation", async function (req, res, next) {
     .create(data)
     .then((user) => {
       res.json({ success: true, data: user });
+    })
+    .catch(next);
+});
+
+router.get("/getAllUsers", async function (req, res, next) {
+  User.findAll()
+    .then((users) => {
+      res.json({ success: true, data: users });
     })
     .catch(next);
 });
@@ -113,6 +103,17 @@ router.post(
   // passport.authenticate("jwt", { session: false }),
   async function (req, res, next) {
     try {
+      const user = await User.findOne({
+        where: { email: req.body.email },
+      });
+
+      if (user) {
+        return res.json({
+          success: false,
+          message: "Already sent invite to the user",
+        });
+      }
+
       const transporter = nodemailer.createTransport({
         service: "gmail",
         host: "smtp.gmail.com",
@@ -128,7 +129,7 @@ router.post(
         },
       });
 
-      const resetToken = crypto.randomBytes(20).toString("hex");
+      const verificationToken = crypto.randomBytes(20).toString("hex");
 
       const mailOptions = {
         to: req.body.email,
@@ -138,21 +139,21 @@ router.post(
         text:
           `You are receiving this because you (or someone else) have invited to join the conversation from your account.\n\n` +
           `Please click on the following link, or paste this into your browser to complete the process:\n\n` +
-          `http://localhost:3000/signup/${resetToken}` +
+          `http://localhost:3000/signup/${verificationToken}\n\n` +
           `If you do not join this, please ignore this email .\n`,
       };
 
       transporter.sendMail(mailOptions, function (err, info) {
         if (err) {
-          console.error("Error sending password reset email:", err);
+          console.error("Error sending invite email:", err);
           return next(err);
         }
 
         User.create({
           email: req.body.email.toLowerCase(),
           chatbotId: req.body.chatbotId,
-          resetPasswordToken: resetToken,
-          resetPasswordExpires: Date.now() + 3600000,
+          inviteEmailVerificationToken: verificationToken,
+          inviteEmailVerificationExpires: Date.now() + 3600000,
         })
           .then((user) => {
             res
@@ -174,6 +175,48 @@ router.post(
     }
   }
 );
+
+router.post("/updateUser/:token", async function (req, res, next) {
+  try {
+    const token = req.params.token;
+
+    const user = await User.findOne({
+      where: { inviteEmailVerificationToken: token },
+    });
+
+    if (!user) {
+      return next(new Error("invalid_verification_token"));
+    }
+    if (user.email !== req.body.email) {
+      return res.json({
+        success: false,
+        message: "Please enter the email address that recieved the invite",
+      });
+    }
+    // Check if the token has expired
+    if (user.inviteEmailVerificationExpires < Date.now()) {
+      return next(new Error("reset_token_expired"));
+    }
+
+    user.firstName = req.body.firstName;
+    user.lastName = req.body.lastName;
+    user.email = req.body.email;
+    user.mobile = req.body.mobile;
+    user.password = bcrypt.hashSync(req.body.password, bcrypt.genSaltSync(8));
+    user.isRestricted = false;
+    user.inviteEmailVerificationToken = null;
+    user.inviteEmailVerificationExpires = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      data: user,
+      message: "User registered successfully",
+    });
+  } catch (e) {
+    next(error);
+  }
+});
 
 router.post("/getconversation", async function (req, res, next) {
   console.log("req.params.chatId ", req.params.chatId);

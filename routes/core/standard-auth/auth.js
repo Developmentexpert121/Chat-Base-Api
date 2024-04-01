@@ -197,7 +197,6 @@ router.post("/reset-password/:token", async function (req, res, next) {
   try {
     const token = req.params.token;
 
-    // Find user with the provided token
     const user = await User.findOne({ where: { resetPasswordToken: token } });
 
     if (!user) {
