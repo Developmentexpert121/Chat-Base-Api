@@ -176,6 +176,32 @@ router.post(
   }
 );
 
+router.get("/getEmail/:token", async function (req, res, next) {
+  try {
+    const token = req.params.token;
+
+    const user = await User.findOne({
+      where: { inviteEmailVerificationToken: token },
+    });
+
+    if (!user) {
+      return next(new Error("invalid_verification_token"));
+    }
+    // Check if the token has expired
+    if (user.inviteEmailVerificationExpires < Date.now()) {
+      return next(new Error("reset_token_expired"));
+    }
+
+    res.json({
+      success: true,
+      data: user.email,
+      message: "This is the email connected to the token",
+    });
+  } catch (e) {
+    next(error);
+  }
+});
+
 router.post("/updateUser/:token", async function (req, res, next) {
   try {
     const token = req.params.token;

@@ -81,6 +81,7 @@ router.post("/", function (req, res, next) {
               data: {
                 token: token,
               },
+              isAdmin: user.isAdmin,
             });
             User.update({ lastLogin: new Date() }, { where: { id: user.id } });
           }
