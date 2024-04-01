@@ -19,7 +19,6 @@ router.get(
 
 /* register api*/
 router.post("/register", function (req, res, next) {
-  console.log(req.body);
   if (!req.body.email) return next(new Error("missing_email"));
   if (!req.body.password) return next(new Error("missing_password"));
 
@@ -73,7 +72,7 @@ router.post("/", function (req, res, next) {
         return next(new Error("invalid_password"));
       }
       if (user.dataValues.isRestricted) {
-        res.json({ success: true, data: "restricted" });
+        res.json({ success: true, isRestricted: true });
       } else {
         jwtUtils.createJwt(user, req.body.rememberMe, function (token) {
           if (token) {
@@ -89,70 +88,110 @@ router.post("/", function (req, res, next) {
       }
     })
     .catch(next);
-}); // Assuming you have a User model defined
-/*reset forget pasword*/
-router.post("/forgot-password", async function (req, res, next) {
-  if (!req.body.email) return next(new Error("missing_email"));
-
-  try {
-    const user = await User.findOne({
-      where: { email: req.body.email.toLowerCase() },
-    });
-
-    if (!user) {
-      return next(new Error("user_not_found"));
-    }
-
-    // Generate a unique reset token
-    const resetToken = crypto.randomBytes(20).toString("hex");
-
-    // Set the reset token and expiry in the database
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // Token expires in 1 hour
-    await user.save();
-
-    // Send email with the reset link
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      host: "smtp.gmail.com",
-      port: "587",
-      auth: {
-        user: "simranbleem@gmail.com",
-        pass: "punl bnvr ltzy mdws",
-      },
-      secureConnection: "false",
-      tls: {
-        ciphers: "SSLv3",
-        rejectUnauthorized: false,
-      },
-    });
-
-    const mailOptions = {
-      to: user.email,
-      from: "simranbleem@gmail.com",
-      subject: "Password Reset",
-      text:
-        `You are receiving this because you (or someone else) have requested the reset of the password for your account.\n\n` +
-        `Please click on the following link, or paste this into your browser to complete the process:\n\n` +
-        `http://localhost:3000/reset-password/${resetToken}\n\n` +
-        `If you did not request this, please ignore this email and your password will remain unchanged.\n`,
-    };
-
-    transporter.sendMail(mailOptions, function (err, info) {
-      if (err) {
-        console.error("Error sending password reset email:", err);
-        return next(err);
-      }
-      res.json({
-        success: true,
-        data: info,
-        message: "Password reset email sent successfully",
-      });
-    });
-  } catch (error) {
-    next(error);
-  }
 });
+
+/* update isRestricted value */
+router.patch("/updateRestricted/:userId", function (req, res, next) {
+  const userId = req.params.userId;
+
+  if (!userId) {
+    return next(new Error("missing_user_id"));
+  }
+
+  if (req.body.isRestricted === undefined) {
+    return next(new Error("missing_isRestricted"));
+  }
+
+  // Find the user by userId
+  User.findByPk(userId)
+    .then((user) => {
+      if (!user) {
+        return next(new Error("user_not_found"));
+      }
+      // Update the isRestricted field
+      user
+        .update({
+          isRestricted: req.body.isRestricted,
+        })
+        .then((updatedUser) => {
+          res.json({
+            success: true,
+            message: "User updated successfully",
+            user: updatedUser,
+          });
+        })
+        .catch((err) => {
+          return next(err);
+        });
+    })
+    .catch(next);
+}); // Assuming you have a User model defined
+
+/*reset forget pasword*/ router.post(
+  "/forgot-password",
+  async function (req, res, next) {
+    if (!req.body.email) return next(new Error("missing_email"));
+
+    try {
+      const user = await User.findOne({
+        where: { email: req.body.email.toLowerCase() },
+      });
+
+      if (!user) {
+        return next(new Error("user_not_found"));
+      }
+
+      // Generate a unique reset token
+      const resetToken = crypto.randomBytes(20).toString("hex");
+
+      // Set the reset token and expiry in the database
+      user.resetPasswordToken = resetToken;
+      user.resetPasswordExpires = Date.now() + 3600000; // Token expires in 1 hour
+      await user.save();
+
+      // Send email with the reset link
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        host: "smtp.gmail.com",
+        port: "587",
+        auth: {
+          user: "simranbleem@gmail.com",
+          pass: "punl bnvr ltzy mdws",
+        },
+        secureConnection: "false",
+        tls: {
+          ciphers: "SSLv3",
+          rejectUnauthorized: false,
+        },
+      });
+
+      const mailOptions = {
+        to: user.email,
+        from: "simranbleem@gmail.com",
+        subject: "Password Reset",
+        text:
+          `You are receiving this because you (or someone else) have requested the reset of the password for your account.\n\n` +
+          `Please click on the following link, or paste this into your browser to complete the process:\n\n` +
+          `http://${req.headers.host}/api/auth/reset-password/${resetToken}\n\n` +
+          `If you did not request this, please ignore this email and your password will remain unchanged.\n`,
+      };
+
+      transporter.sendMail(mailOptions, function (err, info) {
+        if (err) {
+          console.error("Error sending password reset email:", err);
+          return next(err);
+        }
+        res.json({
+          success: true,
+          data: info,
+          message: "Password reset email sent successfully",
+        });
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 router.post("/reset-password/:token", async function (req, res, next) {
   try {

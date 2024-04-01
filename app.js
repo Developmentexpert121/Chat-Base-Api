@@ -7,6 +7,7 @@ var passport = require("passport");
 const authRouter = require("./routes/core/standard-auth/auth");
 const usersRouter = require("./routes/core/users");
 
+
 // cron-manager
 const Cron_Manager = require("./routes/standard/cron-manager/cron-manager");
 
@@ -43,8 +44,7 @@ require("./config/passport")(passport);
 //Public routes
 app.use("/api/auth", authRouter);
 
-app.use("/api/users", /*roleMiddleware,*/ usersRouter);
-
+app.use("/api/users", usersRouter);
 /// Cron Manager
 app.use(
   "/api/standard/cron_manager",

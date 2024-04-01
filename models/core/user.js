@@ -54,6 +54,10 @@ module.exports = (sequelize, DataTypes) => {
         resetPasswordExpires:{
             type: DataTypes.STRING,
             allowNull: true,
+        },
+        chatbotId:{
+            type: DataTypes.STRING,
+            allowNull: true,
         }
     }, {
         tableName: 'user',

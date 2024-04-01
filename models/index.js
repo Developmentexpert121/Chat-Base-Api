@@ -31,6 +31,6 @@ db.Cron_Manager = require("./standard/cron-manager/cron-manager")(
 );
 
 db.User.hasMany(db.Cron_Manager, { foreignKey: "userId", sourceKey: "id" });
-
+db.chatUsers = require("./core/chatUsers")(sequelize, Sequelize);
 
 module.exports = db;
